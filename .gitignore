@@ -48,6 +48,7 @@ app.*.map.json
 .fvm/
 
 .agent
+.windsurf
 
 *_Modul*_080.txt
 *_Modul*_080.md
