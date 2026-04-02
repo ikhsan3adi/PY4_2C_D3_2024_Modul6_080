@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:logbook_app_080/constants/app_constants.dart';
 import 'package:logbook_app_080/features/logbook/models/log_model.dart';
@@ -14,6 +15,18 @@ class MongoService {
 
   factory MongoService() => _instance;
   MongoService._internal();
+
+  @visibleForTesting
+  static void setTestInstance({Db? db, DbCollection? collection}) {
+    _instance._db = db;
+    _instance._collection = collection;
+  }
+
+  @visibleForTesting
+  static void resetTestInstance() {
+    _instance._db = null;
+    _instance._collection = null;
+  }
 
   Future<DbCollection> _getSafeCollection() async {
     if (_db == null || !_db!.isConnected || _collection == null) {

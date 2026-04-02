@@ -4,7 +4,7 @@ import 'package:logbook_app_080/features/logbook/models/log_model.dart';
 import 'package:logbook_app_080/helpers/log_helper.dart';
 import 'package:logbook_app_080/services/access_control_service.dart';
 import 'package:logbook_app_080/services/mongo_service.dart';
-import 'package:mongo_dart/mongo_dart.dart';
+import 'package:mongo_dart/mongo_dart.dart' hide Box;
 
 class LogController {
   final ValueNotifier<List<LogModel>> logsNotifier = ValueNotifier([]);
@@ -15,14 +15,18 @@ class LogController {
   final String teamId;
   final String userRole;
 
-  final _box = Hive.box<LogModel>('offline_logs');
+  final Box<LogModel> _box;
+  final MongoService _mongoService;
 
   LogController({
     required this.username,
     required this.authorId,
     required this.teamId,
     required this.userRole,
-  }) {
+    Box<LogModel>? box,
+    MongoService? mongoService,
+  })  : _box = box ?? Hive.box<LogModel>('offline_logs'),
+        _mongoService = mongoService ?? MongoService() {
     logsNotifier.addListener(() => filteredLogs.value = getVisibleLogs());
   }
 
@@ -68,7 +72,7 @@ class LogController {
     // filteredLogs.value = [...logsNotifier.value, newLog];
 
     try {
-      await MongoService().insertLog(newLog);
+      await _mongoService.insertLog(newLog);
 
       await LogHelper.writeLog(
         "SUCCESS: Tambah data '${newLog.title}'",
@@ -133,7 +137,7 @@ class LogController {
     // filteredLogs.value = currentLogs;
 
     try {
-      await MongoService().updateLog(updatedLog);
+      await _mongoService.updateLog(updatedLog);
 
       await LogHelper.writeLog(
         "SUCCESS: Sinkronisasi Update '${oldLog.title}' Berhasil",
@@ -186,7 +190,7 @@ class LogController {
         );
       }
 
-      await MongoService().deleteLog(targetLog.id!);
+      await _mongoService.deleteLog(targetLog.id!);
 
       await LogHelper.writeLog(
         "SUCCESS: Sinkronisasi Hapus '${targetLog.title}' Berhasil",
@@ -228,7 +232,7 @@ class LogController {
     loadOfflineLogs();
 
     try {
-      final cloudData = await MongoService().getLogs(teamId, authorId);
+      final cloudData = await _mongoService.getLogs(teamId, authorId);
 
       await _box.clear();
       await _box.addAll(cloudData);
