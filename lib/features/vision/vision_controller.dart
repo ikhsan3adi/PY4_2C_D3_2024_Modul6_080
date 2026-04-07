@@ -40,7 +40,7 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
       final cameras = await availableCameras();
 
       if (cameras.isEmpty) {
-        errorMessage = "No camera detected on device.";
+        errorMessage = 'No camera detected on device.';
         notifyListeners();
         return;
       }
@@ -58,7 +58,7 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
       isInitialized = true;
       errorMessage = null;
     } catch (e) {
-      errorMessage = "Failed to initialize camera: $e";
+      errorMessage = 'Failed to initialize camera: $e';
     }
 
     notifyListeners();
@@ -86,7 +86,7 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
 
       return image;
     } catch (e) {
-      errorMessage = "Failed to capture photo: $e";
+      errorMessage = 'Failed to capture photo: $e';
       notifyListeners();
       return null;
     }
@@ -129,7 +129,7 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
         isFlashlightOn ? FlashMode.always : FlashMode.off,
       );
     } catch (e) {
-      errorMessage = "Failed to toggle flashlight: $e";
+      errorMessage = 'Failed to toggle flashlight: $e';
       notifyListeners();
     }
 

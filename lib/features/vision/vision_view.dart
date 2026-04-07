@@ -2,8 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'vision_controller.dart';
 import 'damage_painter.dart';
+import 'vision_controller.dart';
 
 /// VisionPage implements the layered stack architecture
 /// for Smart Patrol System.
@@ -48,7 +48,7 @@ class _VisionViewState extends State<VisionView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Smart-Patrol Vision"),
+        title: const Text('Smart-Patrol Vision'),
         actions: [
           // Flashlight toggle (Phase 6 UX Enhancement)
           IconButton(
@@ -120,7 +120,7 @@ class _VisionViewState extends State<VisionView> {
           const CircularProgressIndicator(),
           const SizedBox(height: 16),
           const Text(
-            "Menghubungkan ke Sensor Visual...",
+            'Menghubungkan ke Sensor Visual...',
             style: TextStyle(fontSize: 16),
           ),
           if (_visionController.errorMessage != null) ...[
@@ -136,7 +136,7 @@ class _VisionViewState extends State<VisionView> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => openAppSettings(),
-              child: const Text("Open Settings"),
+              child: const Text('Open Settings'),
             ),
           ],
         ],
