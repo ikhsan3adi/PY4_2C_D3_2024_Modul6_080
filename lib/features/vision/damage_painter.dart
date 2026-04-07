@@ -1,5 +1,7 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+
 import 'vision_controller.dart';
 
 /// DamagePainter implements custom painting for road damage detection
@@ -36,7 +38,7 @@ class DamagePainter extends CustomPainter {
     final centerY = size.height / 2;
 
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.5)
+      ..color = Colors.white.withValues(alpha: 0.5)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
@@ -59,7 +61,7 @@ class DamagePainter extends CustomPainter {
       Offset(centerX, centerY),
       30,
       Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = Colors.white.withValues(alpha: 0.3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0,
     );
@@ -68,7 +70,7 @@ class DamagePainter extends CustomPainter {
     _drawLabel(
       canvas,
       Rect.fromCircle(center: Offset(centerX, centerY), radius: 30),
-      "Searching for Road Damage...",
+      'Searching for Road Damage...',
       1.0,
     );
   }
@@ -100,7 +102,7 @@ class DamagePainter extends CustomPainter {
 
     // Draw shadow for better visibility
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
+      ..color = Colors.black.withValues(alpha: 0.5)
       ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 3);
 
     canvas.drawRect(box, shadowPaint);

@@ -5,6 +5,7 @@ import 'package:logbook_app_080/features/logbook/log_editor_page.dart';
 import 'package:logbook_app_080/features/logbook/models/log_model.dart';
 import 'package:logbook_app_080/features/logbook/widgets/log_item_widget.dart';
 import 'package:logbook_app_080/features/onboarding/onboarding_view.dart';
+import 'package:logbook_app_080/features/vision/vision_view.dart';
 import 'package:logbook_app_080/helpers/log_helper.dart';
 import 'package:logbook_app_080/services/access_control_service.dart';
 import 'package:logbook_app_080/services/connectivity_service.dart';
@@ -164,6 +165,18 @@ class _LogViewState extends State<LogView> {
         title: const Text('Logbook Proyek'),
         centerTitle: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.camera_alt),
+            tooltip: 'Smart Patrol Vision',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const VisionView(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Keluar',
