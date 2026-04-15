@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'damage_painter.dart';
+import 'image_preview_page.dart';
 import 'vision_controller.dart';
 
 /// VisionPage implements the layered stack architecture
@@ -88,18 +89,11 @@ class _VisionViewState extends State<VisionView> {
         onPressed: () async {
           final image = await _visionController.takePhoto();
           if (image != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Photo saved: ${image.path}'),
-                duration: const Duration(seconds: 3),
-                action: SnackBarAction(
-                  label: 'View',
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    // You can add code here to open the image
-                    // For now, just showing the path
-                  },
-                ),
+            // Navigate to preview & PCD page
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ImagePreviewPage(imagePath: image.path),
               ),
             );
           }
@@ -148,20 +142,28 @@ class _VisionViewState extends State<VisionView> {
   ///
   /// This is the core of Vision architecture:
   /// - Stack with fit: StackFit.expand fills entire screen
-  /// - Layer 1: CameraPreview with AspectRatio to prevent distortion
+  /// - Layer 1: CameraPreview with FittedBox to fill screen
   /// - Layer 2: CustomPaint for digital overlay
+  ///
+  /// FIX: Menggunakan FittedBox dengan BoxFit.cover agar camera fill
+  /// entire screen tanpa squashed, baik di portrait maupun landscape.
+  /// AspectRatio dari controller sering salah di portrait karena sensor
+  /// native-nya landscape.
   Widget _buildVisionStack() {
     return Stack(
       fit: StackFit.expand,
       children: [
         // LAYER 1: Hardware Preview
-        // Use AspectRatio to prevent image distortion (PCD Connection)
-        // Camera images often have different aspect ratios than screen
-        // This ensures the image maintains correct proportions
-        Center(
-          child: AspectRatio(
-            aspectRatio: _visionController.controller!.value.aspectRatio,
-            child: CameraPreview(_visionController.controller!),
+        // FIX: Gunakan FittedBox + BoxFit.cover agar fill screen
+        // tanpa distortion/squashed di portrait mode
+        Positioned.fill(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _visionController.controller!.value.previewSize!.width,
+              height: _visionController.controller!.value.previewSize!.height,
+              child: CameraPreview(_visionController.controller!),
+            ),
           ),
         ),
 
@@ -171,9 +173,7 @@ class _VisionViewState extends State<VisionView> {
         if (_visionController.isOverlayVisible)
           Positioned.fill(
             child: CustomPaint(
-              painter: DamagePainter(
-                _visionController.currentDetections,
-              ), // Phase 4: Will be updated with detections
+              painter: DamagePainter(_visionController.currentDetections),
             ),
           ),
       ],
