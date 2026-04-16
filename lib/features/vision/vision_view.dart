@@ -16,7 +16,7 @@ import 'vision_controller.dart';
 /// This follows Separation of Concerns principle:
 /// - VisionController: Manages camera lifecycle and detection logic
 /// - VisionPage: Manages UI layout and user interactions
-/// - DamagePainter: Manages drawing logic (Phase 4)
+/// - DamagePainter: Manages drawing logic
 class VisionView extends StatefulWidget {
   const VisionView({super.key});
 
@@ -33,7 +33,7 @@ class _VisionViewState extends State<VisionView> {
     super.initState();
     _visionController = VisionController();
 
-    // Start mock detection (Phase 5)
+    // Start mock detection
     _visionController.startMockDetection();
   }
 
@@ -51,7 +51,7 @@ class _VisionViewState extends State<VisionView> {
       appBar: AppBar(
         title: const Text('Smart-Patrol Vision'),
         actions: [
-          // Flashlight toggle (Phase 6 UX Enhancement)
+          // Flashlight toggle
           IconButton(
             icon: Icon(
               _visionController.isFlashlightOn
@@ -61,7 +61,7 @@ class _VisionViewState extends State<VisionView> {
             onPressed: _visionController.toggleFlashlight,
             tooltip: 'Toggle Flashlight',
           ),
-          // Overlay visibility toggle (Phase 6 UX Enhancement)
+          // Overlay visibility toggle
           IconButton(
             icon: Icon(
               _visionController.isOverlayVisible
@@ -105,7 +105,6 @@ class _VisionViewState extends State<VisionView> {
   }
 
   /// Build loading state with informative message
-  /// Phase 6 UX Enhancement
   Widget _buildLoadingState() {
     return Center(
       child: Column(
@@ -138,38 +137,16 @@ class _VisionViewState extends State<VisionView> {
     );
   }
 
-  /// Build the layered stack architecture
-  ///
-  /// This is the core of Vision architecture:
-  /// - Stack with fit: StackFit.expand fills entire screen
-  /// - Layer 1: CameraPreview with FittedBox to fill screen
-  /// - Layer 2: CustomPaint for digital overlay
-  ///
-  /// FIX: Menggunakan FittedBox dengan BoxFit.cover agar camera fill
-  /// entire screen tanpa squashed, baik di portrait maupun landscape.
-  /// AspectRatio dari controller sering salah di portrait karena sensor
-  /// native-nya landscape.
   Widget _buildVisionStack() {
     return Stack(
       fit: StackFit.expand,
       children: [
         // LAYER 1: Hardware Preview
-        // FIX: Gunakan FittedBox + BoxFit.cover agar fill screen
-        // tanpa distortion/squashed di portrait mode
-        Positioned.fill(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _visionController.controller!.value.previewSize!.width,
-              height: _visionController.controller!.value.previewSize!.height,
-              child: CameraPreview(_visionController.controller!),
-            ),
-          ),
-        ),
+        Center(child: CameraPreview(_visionController.controller!)),
 
         // LAYER 2: Digital Overlay (Canvas)
         // This layer is transparent and sits exactly above camera
-        // DamagePainter will draw detection boxes here (Phase 4)
+        // DamagePainter will draw detection boxes here
         if (_visionController.isOverlayVisible)
           Positioned.fill(
             child: CustomPaint(

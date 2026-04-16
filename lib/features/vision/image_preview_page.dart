@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:camera/camera.dart';
-import 'package:dartcv4/dartcv.dart' as cv;
 import 'package:flutter/material.dart';
 import 'package:logbook_app_080/features/vision/services/image_processor.dart';
+import 'package:opencv_dart/opencv_dart.dart' as cv;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -12,11 +11,9 @@ import 'package:share_plus/share_plus.dart';
 ///
 /// Fitur:
 /// - Tampilkan hasil capture dari kamera
-/// - Apply PCD operations (contrast, histogram, blur, sharpen, edge)
+/// - Apply PCD operations (contrast, histogram equalization, blur, sharpen, edge)
 /// - Save processed image
 /// - Share image
-///
-/// Referensi: chat-di-grup-pcd.md - diskusi PCD operations
 class ImagePreviewPage extends StatefulWidget {
   final String imagePath;
 
@@ -26,12 +23,16 @@ class ImagePreviewPage extends StatefulWidget {
   State<ImagePreviewPage> createState() => _ImagePreviewPageState();
 }
 
-class _ImagePreviewPageState extends State<ImagePreviewPage> {
+class _ImagePreviewPageState extends State<ImagePreviewPage>
+    with SingleTickerProviderStateMixin {
   Uint8List? _originalBytes;
   Uint8List? _processedBytes;
   cv.Mat? _currentMat;
   bool _isProcessing = false;
   String? _currentOperation;
+  bool _showOriginal = false;
+
+  late TabController _tabController;
 
   // Parameters untuk operations
   double _contrastAlpha = 1.0;
@@ -40,15 +41,22 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
   double _edgeThreshold1 = 50;
   double _edgeThreshold2 = 150;
   double _thresholdValue = 127;
+  double _medianKernelSize = 5;
+  double _gammaValue = 1.0;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: PcdOperationType.values.length,
+      vsync: this,
+    );
     _loadImage();
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _currentMat?.dispose();
     super.dispose();
   }
@@ -56,11 +64,11 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
   Future<void> _loadImage() async {
     setState(() => _isProcessing = true);
     try {
-      // Load menggunakan OpenCV
       _currentMat = await ImageProcessor.loadImage(widget.imagePath);
       _originalBytes = ImageProcessor.matToBytes(_currentMat!);
       _processedBytes = _originalBytes;
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error loading image: $e')));
@@ -89,10 +97,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
           );
           break;
         case PcdOperationType.histogram:
-          result = ImageProcessor.applyHistogramEqualization(
-            _currentMat!,
-            isColor: true,
-          );
+          result = ImageProcessor.applyHistogramEqualization(_currentMat!);
           break;
         case PcdOperationType.gaussianBlur:
           result = ImageProcessor.applyGaussianBlur(
@@ -113,11 +118,32 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
         case PcdOperationType.threshold:
           result = ImageProcessor.applyThreshold(_currentMat!, _thresholdValue);
           break;
+        case PcdOperationType.fourier:
+          result = ImageProcessor.applyFourierTransform(_currentMat!);
+          setState(() {
+            _processedBytes = ImageProcessor.matToBytes(result);
+            result.dispose();
+          });
+          setState(() => _isProcessing = false);
+          return;
+        case PcdOperationType.medianFilter:
+          result = ImageProcessor.applyMedianFilter(
+            _currentMat!,
+            kernelSize: _medianKernelSize.toInt(),
+          );
+          break;
+        case PcdOperationType.gamma:
+          result = ImageProcessor.applyGammaCorrection(
+            _currentMat!,
+            _gammaValue,
+          );
+          break;
       }
 
       setState(() {
+        _currentMat?.dispose();
+        _currentMat = result;
         _processedBytes = ImageProcessor.matToBytes(result);
-        result.dispose();
       });
     } catch (e) {
       ScaffoldMessenger.of(
@@ -128,7 +154,9 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     }
   }
 
-  void _resetImage() {
+  Future<void> _resetImage() async {
+    _currentMat?.dispose();
+    _currentMat = await ImageProcessor.loadImage(widget.imagePath);
     setState(() {
       _processedBytes = _originalBytes;
       _currentOperation = null;
@@ -146,12 +174,12 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
       final file = File(path);
       await file.writeAsBytes(_processedBytes!);
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Saved to: $path')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved to: $path')));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error saving: $e')));
@@ -175,6 +203,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error sharing: $e')));
@@ -206,27 +235,66 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
       ),
       body: Column(
         children: [
-          // Image Preview Area
+          // Image Preview Area dengan Toggle Original
           Expanded(
             flex: 3,
-            child: Container(
-              color: Colors.black,
-              child: Center(
-                child: _isProcessing
-                    ? const CircularProgressIndicator()
-                    : _processedBytes != null
-                    ? InteractiveViewer(
-                        minScale: 0.5,
-                        maxScale: 4,
-                        child: Image.memory(
-                          _processedBytes!,
-                          fit: BoxFit.contain,
+            child: GestureDetector(
+              onTapDown: (_) => setState(() => _showOriginal = true),
+              onTapUp: (_) => setState(() => _showOriginal = false),
+              onTapCancel: () => setState(() => _showOriginal = false),
+              child: Container(
+                color: Colors.black,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Center(
+                      child: _isProcessing
+                          ? const CircularProgressIndicator()
+                          : _processedBytes != null
+                          ? InteractiveViewer(
+                              minScale: 0.5,
+                              maxScale: 4,
+                              child: Image.memory(
+                                _showOriginal
+                                    ? _originalBytes!
+                                    : _processedBytes!,
+                                fit: BoxFit.contain,
+                              ),
+                            )
+                          : const Text(
+                              'No image',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                    ),
+                    // Hint untuk toggle
+                    Positioned(
+                      bottom: 16,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            _showOriginal
+                                ? 'Showing Original'
+                                : 'Tap & hold to see original',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
-                      )
-                    : const Text(
-                        'No image',
-                        style: TextStyle(color: Colors.white),
                       ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -247,39 +315,48 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
               ),
             ),
 
-          // Parameters Panel (contextual based on selected operation)
+          // TabBar untuk PCD Operations
+          TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabs: PcdOperationType.values.map((op) {
+              return Tab(icon: _getOperationIcon(op), text: op.label);
+            }).toList(),
+          ),
+
+          // TabBarView dengan Parameter dan Apply Button
           Expanded(
             flex: 2,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'PCD Operations',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Parameter sliders
-                  _buildParameterSliders(),
-
-                  const SizedBox(height: 16),
-
-                  // Operation buttons
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: PcdOperationType.values.map((op) {
-                      return ActionChip(
-                        avatar: _getOperationIcon(op),
-                        label: Text(op.label),
+            child: TabBarView(
+              controller: _tabController,
+              children: PcdOperationType.values.map((op) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Parameter khusus per operasi
+                      _buildTabContent(op),
+                      const SizedBox(height: 16),
+                      // Apply Button
+                      ElevatedButton.icon(
                         onPressed: () => _applyOperation(op),
-                      );
-                    }).toList(),
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text('Apply'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -287,92 +364,119 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     );
   }
 
-  Widget _buildParameterSliders() {
-    return Column(
-      children: [
-        // Contrast parameters
-        Text(
-          'Kontras: Alpha ${_contrastAlpha.toStringAsFixed(2)}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _contrastAlpha,
-          min: 0.0,
-          max: 3.0,
-          divisions: 30,
-          onChanged: (v) => setState(() => _contrastAlpha = v),
-        ),
-
-        Text(
-          'Brightness: Beta ${_contrastBeta.toStringAsFixed(1)}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _contrastBeta,
-          min: -50,
-          max: 50,
-          divisions: 100,
-          onChanged: (v) => setState(() => _contrastBeta = v),
-        ),
-
-        const Divider(),
-
-        // Blur kernel size
-        Text(
-          'Blur Kernel: ${_blurKernelSize.toInt()}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _blurKernelSize,
-          min: 3,
-          max: 15,
-          divisions: 6,
-          onChanged: (v) => setState(() => _blurKernelSize = v),
-        ),
-
-        const Divider(),
-
-        // Edge detection thresholds
-        Text(
-          'Edge Threshold1: ${_edgeThreshold1.toInt()}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _edgeThreshold1,
-          min: 0,
-          max: 200,
-          divisions: 20,
-          onChanged: (v) => setState(() => _edgeThreshold1 = v),
-        ),
-
-        Text(
-          'Edge Threshold2: ${_edgeThreshold2.toInt()}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _edgeThreshold2,
-          min: 0,
-          max: 300,
-          divisions: 30,
-          onChanged: (v) => setState(() => _edgeThreshold2 = v),
-        ),
-
-        const Divider(),
-
-        // Threshold value
-        Text(
-          'Threshold: ${_thresholdValue.toInt()}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        Slider(
-          value: _thresholdValue,
-          min: 0,
-          max: 255,
-          divisions: 25,
-          onChanged: (v) => setState(() => _thresholdValue = v),
-        ),
-      ],
-    );
+  /// Build content untuk setiap tab sesuai operasi
+  Widget _buildTabContent(PcdOperationType op) {
+    switch (op) {
+      case PcdOperationType.contrast:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Alpha (Contrast): ${_contrastAlpha.toStringAsFixed(2)}'),
+            Slider(
+              value: _contrastAlpha,
+              min: 0.0,
+              max: 3.0,
+              divisions: 30,
+              onChanged: (v) => setState(() => _contrastAlpha = v),
+            ),
+            Text('Beta (Brightness): ${_contrastBeta.toStringAsFixed(1)}'),
+            Slider(
+              value: _contrastBeta,
+              min: -50,
+              max: 50,
+              divisions: 100,
+              onChanged: (v) => setState(() => _contrastBeta = v),
+            ),
+          ],
+        );
+      case PcdOperationType.histogram:
+      case PcdOperationType.sharpen:
+      case PcdOperationType.fourier:
+        return const Center(
+          child: Text(
+            'No parameters needed',
+            style: TextStyle(color: Colors.grey),
+          ),
+        );
+      case PcdOperationType.gaussianBlur:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Kernel Size: ${_blurKernelSize.toInt()}'),
+            Slider(
+              value: _blurKernelSize,
+              min: 3,
+              max: 15,
+              divisions: 6,
+              onChanged: (v) => setState(() => _blurKernelSize = v),
+            ),
+          ],
+        );
+      case PcdOperationType.edgeDetection:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Threshold 1: ${_edgeThreshold1.toInt()}'),
+            Slider(
+              value: _edgeThreshold1,
+              min: 0,
+              max: 200,
+              divisions: 40,
+              onChanged: (v) => setState(() => _edgeThreshold1 = v),
+            ),
+            Text('Threshold 2: ${_edgeThreshold2.toInt()}'),
+            Slider(
+              value: _edgeThreshold2,
+              min: 0,
+              max: 300,
+              divisions: 60,
+              onChanged: (v) => setState(() => _edgeThreshold2 = v),
+            ),
+          ],
+        );
+      case PcdOperationType.threshold:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Threshold Value: ${_thresholdValue.toInt()}'),
+            Slider(
+              value: _thresholdValue,
+              min: 0,
+              max: 255,
+              divisions: 255,
+              onChanged: (v) => setState(() => _thresholdValue = v),
+            ),
+          ],
+        );
+      case PcdOperationType.medianFilter:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Kernel Size: ${_medianKernelSize.toInt()}'),
+            Slider(
+              value: _medianKernelSize,
+              min: 3,
+              max: 11,
+              divisions: 4,
+              onChanged: (v) => setState(() => _medianKernelSize = v),
+            ),
+          ],
+        );
+      case PcdOperationType.gamma:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Gamma: ${_gammaValue.toStringAsFixed(2)}'),
+            Slider(
+              value: _gammaValue,
+              min: 0.1,
+              max: 3.0,
+              divisions: 29,
+              onChanged: (v) => setState(() => _gammaValue = v),
+            ),
+          ],
+        );
+    }
   }
 
   Icon _getOperationIcon(PcdOperationType op) {
@@ -389,6 +493,12 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
         return const Icon(Icons.line_style, size: 18);
       case PcdOperationType.threshold:
         return const Icon(Icons.contrast, size: 18);
+      case PcdOperationType.fourier:
+        return const Icon(Icons.waves, size: 18);
+      case PcdOperationType.medianFilter:
+        return const Icon(Icons.filter_list, size: 18);
+      case PcdOperationType.gamma:
+        return const Icon(Icons.brightness_6, size: 18);
     }
   }
 }

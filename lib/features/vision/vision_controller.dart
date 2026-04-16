@@ -19,11 +19,11 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
   bool isInitialized = false;
   String? errorMessage;
 
-  // Detection results (for Phase 5)
+  // Detection results
   List<DetectionResult> currentDetections = [];
   Timer? _mockDetectionTimer;
 
-  // UX Enhancement: Flashlight and Overlay toggles (Phase 6)
+  // UX Enhancement: Flashlight and Overlay toggles
   bool isFlashlightOn = false;
   bool isOverlayVisible = true;
 
@@ -118,7 +118,6 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Toggle flashlight (torch) on/off
-  /// UX Enhancement from Phase 6
   Future<void> toggleFlashlight() async {
     if (controller == null || !controller!.value.isInitialized) return;
 
@@ -137,14 +136,13 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Toggle overlay visibility
-  /// UX Enhancement from Phase 6
   void toggleOverlay() {
     isOverlayVisible = !isOverlayVisible;
     notifyListeners();
   }
 
   /// Start mock detection simulation
-  /// Phase 5: Simulates AI detection by moving bounding box every 3 seconds
+  /// Simulates AI detection by moving bounding box every 3 seconds
   void startMockDetection() {
     _mockDetectionTimer = Timer.periodic(
       const Duration(seconds: 3),

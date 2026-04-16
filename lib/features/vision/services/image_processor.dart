@@ -1,6 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:dartcv4/dartcv.dart' as cv;
+import 'package:opencv_dart/opencv_dart.dart' as cv;
 
 /// ImageProcessor service untuk pengolahan citra digital (PCD)
 ///
@@ -8,9 +9,6 @@ import 'package:dartcv4/dartcv.dart' as cv;
 /// - Contrast adjustment (alpha/beta)
 /// - Histogram equalization
 /// - Convolution (blur, sharpen, edge detection)
-///
-/// Referensi diskusi: chat-di-grup-pcd.md
-/// Referensi API: https://github.com/rainyl/opencv_dart
 class ImageProcessor {
   /// Load image dari file path ke cv.Mat
   /// [flags]: cv.IMREAD_COLOR (default), cv.IMREAD_GRAYSCALE, dll
@@ -50,8 +48,8 @@ class ImageProcessor {
   /// Apply histogram equalization
   /// Untuk grayscale: langsung apply
   /// Untuk color: convert ke HSV, equalize V channel, convert back
-  static cv.Mat applyHistogramEqualization(cv.Mat src, {bool isColor = true}) {
-    if (!isColor) {
+  static cv.Mat applyHistogramEqualization(cv.Mat src) {
+    if (src.channels == 1) {
       return cv.equalizeHist(src);
     }
 
@@ -60,11 +58,15 @@ class ImageProcessor {
     final channels = cv.split(hsv);
 
     // Equalize V channel (index 2)
-    final equalizedV = cv.equalizeHist(channels[2]);
-    channels[2] = equalizedV;
+    final equalizedV = cv.equalizeHist(channels.elementAt(2));
 
     // Merge channels back
-    final merged = cv.merge(channels);
+    final mergedVec = cv.VecMat.fromList([
+      channels.elementAt(0),
+      channels.elementAt(1),
+      equalizedV,
+    ]);
+    final merged = cv.merge(mergedVec);
 
     // Convert back to BGR
     return cv.cvtColor(merged, cv.COLOR_HSV2BGR);
@@ -84,12 +86,8 @@ class ImageProcessor {
 
   /// Apply sharpening menggunakan unsharp mask
   static cv.Mat applySharpen(cv.Mat src) {
-    // Gaussian blur
     final blurred = applyGaussianBlur(src, kernelSize: 5, sigma: 1.0);
-    // Unsharp mask: src + (src - blurred) * amount
-    final diff = cv.subtract(src, blurred);
-    final sharpened = cv.addWeighted(src, 1.5, diff, 0.5, 0);
-    return sharpened;
+    return cv.addWeighted(src, 1.5, blurred, -0.5, 0);
   }
 
   /// Apply edge detection menggunakan Canny
@@ -99,16 +97,13 @@ class ImageProcessor {
     double threshold1 = 50,
     double threshold2 = 150,
   }) {
-    // Convert to grayscale first
-    final gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY);
-
-    // Canny edge detection
+    final gray = src.channels == 1 ? src : cv.cvtColor(src, cv.COLOR_BGR2GRAY);
     return cv.canny(gray, threshold1, threshold2);
   }
 
   /// Apply thresholding (binary/mask)
   static cv.Mat applyThreshold(cv.Mat src, double thresh, {int maxval = 255}) {
-    final gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY);
+    final gray = src.channels == 1 ? src : cv.cvtColor(src, cv.COLOR_BGR2GRAY);
     return cv
         .threshold(gray, thresh.toDouble(), maxval.toDouble(), cv.THRESH_BINARY)
         .$2;
@@ -125,16 +120,100 @@ class ImageProcessor {
     final rotMat = cv.getRotationMatrix2D(center, angle, 1.0);
     return cv.warpAffine(src, rotMat, (src.cols, src.rows));
   }
+
+  /// Apply Fourier Transform dan return magnitude spectrum untuk visualisasi
+  static cv.Mat applyFourierTransform(cv.Mat src) {
+    final gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY);
+
+    // Convert ke tipe float32
+    final floatGray = gray.convertTo(cv.MatType.CV_32FC1);
+
+    // Eksekusi Discrete Fourier Transform (DFT)
+    final dft = cv.dft(floatGray, flags: cv.DFT_COMPLEX_OUTPUT);
+    final channels = cv.split(dft);
+
+    if (channels.length >= 2) {
+      // Hitung magnitude dari Real (index 0) dan Imaginary (index 1)
+      cv.Mat mag = cv.magnitude(channels.elementAt(0), channels.elementAt(1));
+
+      // FFT Shift: swap quadran untuk center DC
+      mag = mag.region(cv.Rect(0, 0, mag.cols & -2, mag.rows & -2));
+
+      // titik tengah
+      final cx = mag.cols ~/ 2;
+      final cy = mag.rows ~/ 2;
+
+      // Bagi menjadi 4 kuadran
+      final q0 = mag.region(cv.Rect(0, 0, cx, cy)); // Top-Left
+      final q1 = mag.region(cv.Rect(cx, 0, cx, cy)); // Top-Right
+      final q2 = mag.region(cv.Rect(0, cy, cx, cy)); // Bottom-Left
+      final q3 = mag.region(cv.Rect(cx, cy, cx, cy)); // Bottom-Right
+
+      final tmp = q0.clone();
+      q3.copyTo(q0);
+      tmp.copyTo(q3);
+
+      final tmp2 = q1.clone();
+      q2.copyTo(q1);
+      tmp2.copyTo(q2);
+
+      // Transformasi ke skala Logaritmik (mag = log(1 + mag))
+      final ones = cv.Mat.ones(mag.rows, mag.cols, cv.MatType.CV_32FC1);
+      mag = cv.add(mag, ones);
+      mag = cv.log(mag);
+
+      // Normalisasi ke rentang 0-255 agar dapat divisualisasikan
+      final dst = cv.Mat.empty();
+
+      return cv.normalize(
+        mag,
+        dst,
+        alpha: 0,
+        beta: 255,
+        normType: cv.NORM_MINMAX,
+        dtype: cv.MatType.CV_8UC1.value,
+      );
+    }
+
+    return gray;
+  }
+
+  /// Apply Median Filter untuk denoising
+  static cv.Mat applyMedianFilter(cv.Mat src, {int kernelSize = 5}) {
+    final kSize = (kernelSize ~/ 2) * 2 + 1;
+    return cv.medianBlur(src, kSize);
+  }
+
+  /// Apply Gamma Correction dengan LUT
+  /// Formula: output = 255 * (input/255)^gamma
+  static cv.Mat applyGammaCorrection(cv.Mat src, double gamma) {
+    final invGamma = 1.0 / gamma;
+
+    final lutBytes = Uint8List(256);
+    for (int i = 0; i < 256; i++) {
+      lutBytes[i] = (math.pow(i / 255.0, invGamma) * 255.0).toInt().clamp(
+        0,
+        255,
+      );
+    }
+
+    final lutMat = cv.Mat.fromList(1, 256, cv.MatType.CV_8UC1, lutBytes);
+
+    return cv.LUT(src, lutMat);
+  }
 }
 
 /// Enum untuk jenis operasi PCD yang tersedia
 enum PcdOperationType {
-  contrast('Kontras', 'Adjust contrast & brightness'),
-  histogram('Histogram', 'Histogram equalization'),
-  gaussianBlur('Gaussian Blur', 'Smoothing dengan Gaussian'),
+  contrast('Brightness & Contrast', 'Adjust contrast & brightness'),
+  histogram('Histogram Equalization', 'Histogram equalization'),
+  gaussianBlur('Gaussian Blur', 'Smoothing with Gaussian Blur'),
   sharpen('Sharpen', 'Unsharp mask sharpening'),
   edgeDetection('Edge Detection', 'Canny edge detection'),
-  threshold('Threshold', 'Binary thresholding');
+  threshold('Threshold', 'Binary thresholding'),
+  fourier('Fourier Transform', 'Frequency domain visualization'),
+  medianFilter('Median Filter', 'Denoising with median filter'),
+  gamma('Gamma', 'Gamma correction');
 
   final String label;
   final String description;

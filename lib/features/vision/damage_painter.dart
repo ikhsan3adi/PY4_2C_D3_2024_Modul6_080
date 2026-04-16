@@ -19,7 +19,7 @@ class DamagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // If no detections, draw static crosshair (Phase 4 requirement)
+    // If no detections, draw static crosshair
     if (results.isEmpty) {
       _drawStaticCrosshair(canvas, size);
       return;
@@ -186,7 +186,6 @@ class DamagePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     // Repaint when detections change
-    // In Phase 5, this will be true for dynamic updates
     return true;
   }
 }
