@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+import 'models/detection_result.dart';
+
 /// VisionController manages the camera lifecycle and detection logic
 /// for the Smart Patrol System.
 ///
@@ -206,24 +208,4 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
 
     super.dispose();
   }
-}
-
-/// Data Transfer Object (DTO) for detection results
-///
-/// This follows the Single Responsibility Principle:
-/// - VisionController generates these objects
-/// - DamagePainter only draws them
-///
-/// If you replace YOLO with another model, only change data population
-/// in VisionController without touching UI or Painter code.
-class DetectionResult {
-  final Rect box; // Box coordinates (normalized 0.0-1.0)
-  final String label; // Damage type (D40, D20, etc)
-  final double score; // AI confidence percentage (0.0-1.0)
-
-  DetectionResult({
-    required this.box,
-    required this.label,
-    required this.score,
-  });
 }

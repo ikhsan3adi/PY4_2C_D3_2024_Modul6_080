@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import 'vision_controller.dart';
+import 'models/detection_result.dart';
 
 /// DamagePainter implements custom painting for road damage detection
 ///
