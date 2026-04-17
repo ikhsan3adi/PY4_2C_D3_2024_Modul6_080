@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'damage_painter.dart';
@@ -85,21 +86,50 @@ class _VisionViewState extends State<VisionView> {
           return _buildVisionStack();
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final image = await _visionController.takePhoto();
-          if (image != null && context.mounted) {
-            // Navigate to preview & PCD page
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ImagePreviewPage(imagePath: image.path),
-              ),
-            );
-          }
-        },
-        tooltip: 'Capture Photo',
-        child: const Icon(Icons.camera),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Upload from gallery button
+          FloatingActionButton.small(
+            heroTag: 'upload',
+            onPressed: () async {
+              final ImagePicker picker = ImagePicker();
+              final XFile? pickedFile = await picker.pickImage(
+                source: ImageSource.gallery,
+              );
+              if (pickedFile != null && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ImagePreviewPage(imagePath: pickedFile.path),
+                  ),
+                );
+              }
+            },
+            tooltip: 'Upload Image',
+            child: const Icon(Icons.photo_library),
+          ),
+          const SizedBox(height: 8),
+          // Capture photo button
+          FloatingActionButton(
+            heroTag: 'capture',
+            onPressed: () async {
+              final image = await _visionController.takePhoto();
+              if (image != null && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ImagePreviewPage(imagePath: image.path),
+                  ),
+                );
+              }
+            },
+            tooltip: 'Capture Photo',
+            child: const Icon(Icons.camera),
+          ),
+        ],
       ),
     );
   }
