@@ -123,7 +123,7 @@ class ImageProcessor {
 
   /// Apply Fourier Transform dan return magnitude spectrum untuk visualisasi
   static cv.Mat applyFourierTransform(cv.Mat src) {
-    final gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY);
+    final gray = src.channels == 1 ? src : cv.cvtColor(src, cv.COLOR_BGR2GRAY);
 
     // Convert ke tipe float32
     final floatGray = gray.convertTo(cv.MatType.CV_32FC1);
@@ -176,6 +176,67 @@ class ImageProcessor {
     }
 
     return gray;
+  }
+
+  /// Apply Fourier Transform pada gambar sumber [src]
+  /// Mengembalikan dua objek:
+  /// - [magnitude] = magnitudo frekuensi
+  /// - [complex] = kompleks frekuensi
+  static ({cv.Mat magnitude, cv.Mat complex}) applyFourierTransformFull(
+    cv.Mat src,
+  ) {
+    final gray = src.channels == 1 ? src : cv.cvtColor(src, cv.COLOR_BGR2GRAY);
+    final floatGray = gray.convertTo(cv.MatType.CV_32FC1);
+    final dft = cv.dft(floatGray, flags: cv.DFT_COMPLEX_OUTPUT);
+
+    final channels = cv.split(dft);
+    cv.Mat mag = cv.magnitude(channels.elementAt(0), channels.elementAt(1));
+
+    // FFT Shift
+    final cx = mag.cols ~/ 2;
+    final cy = mag.rows ~/ 2;
+    final q0 = mag.region(cv.Rect(0, 0, cx, cy));
+    final q1 = mag.region(cv.Rect(cx, 0, cx, cy));
+    final q2 = mag.region(cv.Rect(0, cy, cx, cy));
+    final q3 = mag.region(cv.Rect(cx, cy, cx, cy));
+
+    final tmp = q0.clone();
+    q3.copyTo(q0);
+    tmp.copyTo(q3);
+
+    final tmp2 = q1.clone();
+    q2.copyTo(q1);
+    tmp2.copyTo(q2);
+
+    // Log scale
+    final ones = cv.Mat.ones(mag.rows, mag.cols, cv.MatType.CV_32FC1);
+    mag = cv.add(mag, ones);
+    mag = cv.log(mag);
+
+    // Normalize
+    final dst = cv.Mat.empty();
+    final normalized = cv.normalize(
+      mag,
+      dst,
+      alpha: 0,
+      beta: 255,
+      normType: cv.NORM_MINMAX,
+      dtype: cv.MatType.CV_8UC1.value,
+    );
+
+    return (magnitude: normalized, complex: dft);
+  }
+
+  static cv.Mat applyInverseFourierTransform(cv.Mat complex) {
+    final idft = cv.dft(complex, flags: cv.DFT_INVERSE | cv.DFT_REAL_OUTPUT);
+    return cv.normalize(
+      idft,
+      cv.Mat.empty(),
+      alpha: 0,
+      beta: 255,
+      normType: cv.NORM_MINMAX,
+      dtype: cv.MatType.CV_8UC1.value,
+    );
   }
 
   /// Apply Median Filter untuk denoising

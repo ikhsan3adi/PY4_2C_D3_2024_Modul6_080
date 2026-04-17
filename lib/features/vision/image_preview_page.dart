@@ -29,9 +29,11 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
   Uint8List? _originalBytes;
   Uint8List? _processedBytes;
   cv.Mat? _currentMat;
+  cv.Mat? _fourierComplex;
   bool _isProcessing = false;
   String? _currentOperation;
   bool _showOriginal = false;
+  ImageDomain _currentDomain = ImageDomain.spatial;
 
   late TabController _tabController;
 
@@ -59,6 +61,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
   void dispose() {
     _tabController.dispose();
     _currentMat?.dispose();
+    _fourierComplex?.dispose();
     super.dispose();
   }
 
@@ -80,6 +83,33 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
 
   Future<void> _applyOperation(PcdOperationType operation) async {
     if (_currentMat == null) return;
+
+    // Validasi domain
+    if (operation.isSpatialOnly && _currentDomain == ImageDomain.frequency) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Operasi spasial hanya untuk gambar domain spasial. Lakukan Inverse Fourier terlebih dahulu.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onError),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
+
+    if (operation.isFourierOnly && _currentDomain == ImageDomain.spatial) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Inverse Fourier hanya untuk gambar domain frekuensi. Lakukan Fourier Transform terlebih dahulu.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onError),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isProcessing = true;
@@ -120,13 +150,34 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
           result = ImageProcessor.applyThreshold(_currentMat!, _thresholdValue);
           break;
         case PcdOperationType.fourier:
-          result = ImageProcessor.applyFourierTransform(_currentMat!);
+          final fourierResult = ImageProcessor.applyFourierTransformFull(
+            _currentMat!,
+          );
+          result = fourierResult.magnitude;
+          _fourierComplex?.dispose();
+          _fourierComplex = fourierResult.complex;
+          _currentDomain = ImageDomain.frequency;
           setState(() {
             _processedBytes = ImageProcessor.matToBytes(result);
-            result.dispose();
+            _isProcessing = false;
           });
-          setState(() => _isProcessing = false);
           return;
+        case PcdOperationType.inverseFourier:
+          if (_fourierComplex == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Tidak ada data frekuensi. Lakukan Fourier Transform terlebih dahulu.',
+                ),
+              ),
+            );
+            return;
+          }
+          result = ImageProcessor.applyInverseFourierTransform(
+            _fourierComplex!,
+          );
+          _currentDomain = ImageDomain.spatial;
+          break;
         case PcdOperationType.medianFilter:
           result = ImageProcessor.applyMedianFilter(
             _currentMat!,
@@ -157,10 +208,12 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
 
   Future<void> _resetImage() async {
     _currentMat?.dispose();
+    _fourierComplex?.dispose();
     _currentMat = await ImageProcessor.loadImage(widget.imagePath);
     setState(() {
       _processedBytes = _originalBytes;
       _currentOperation = null;
+      _currentDomain = ImageDomain.spatial;
     });
   }
 
@@ -340,20 +393,36 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
                       _buildTabContent(op),
                       const SizedBox(height: 16),
                       // Apply Button
-                      ElevatedButton.icon(
-                        onPressed: () => _applyOperation(op),
-                        icon: const Icon(Icons.auto_awesome),
-                        label: const Text('Apply'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
+                      if (op.domainType == ImageDomain.frequency)
+                        ElevatedButton.icon(
+                          onPressed: () => _applyOperation(op),
+                          icon: const Icon(Icons.functions),
+                          label: const Text('Transform'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                          ),
                         ),
-                      ),
+                      if (op.domainType == ImageDomain.spatial)
+                        ElevatedButton.icon(
+                          onPressed: () => _applyOperation(op),
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('Apply'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimary,
+                          ),
+                        ),
                     ],
                   ),
                 );
@@ -393,6 +462,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
       case PcdOperationType.histogram:
       case PcdOperationType.sharpen:
       case PcdOperationType.fourier:
+      case PcdOperationType.inverseFourier:
         return const Center(
           child: Text(
             'No parameters needed',
@@ -496,6 +566,8 @@ class _ImagePreviewPageState extends State<ImagePreviewPage>
         return const Icon(Icons.contrast, size: 18);
       case PcdOperationType.fourier:
         return const Icon(Icons.waves, size: 18);
+      case PcdOperationType.inverseFourier:
+        return const Icon(Icons.waves_outlined, size: 18);
       case PcdOperationType.medianFilter:
         return const Icon(Icons.filter_list, size: 18);
       case PcdOperationType.gamma:
