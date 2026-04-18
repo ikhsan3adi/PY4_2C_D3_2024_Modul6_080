@@ -1,9 +1,4 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 class AccessControlService {
-  static List<String> get availableRoles =>
-      dotenv.env['APP_ROLES']?.split(',') ?? ['Anggota'];
-
   static const String actionCreate = 'create';
   static const String actionRead = 'read';
   static const String actionUpdate = 'update';

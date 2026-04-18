@@ -41,6 +41,62 @@ Aplikasi Smart Patrol System dengan fitur Computer Vision dan Pengolahan Citra D
 |                         **Edge Detection**                         |                        **Histogram Equalization**                        |                        **Gaussian Blur**                        |                        **Sharpening**                         |
 | ![Edge Detection](.screenshots/modul-6-ai/pcd-edge-detection.jpg)  | ![Histogram Equalization](.screenshots/modul-6-ai/pcd-histogram-eq.jpg)  | ![Gaussian Blur](.screenshots/modul-6-ai/pcd-gaussian-blur.jpg) |    ![Sharpening](.screenshots/modul-6-ai/pcd-sharpen.jpg)     |
 
+## Instalasi dan Cara Menjalankan
+
+### Prasyarat
+
+- Flutter SDK >= 3.41.x
+- Android SDK
+- Git
+
+### Langkah Instalasi
+
+1. **Clone Repository**
+   ```bash
+   git clone https://github.com/ikhsan3adi/PY4_2C_D3_2024_Modul6_080.git
+   cd PY4_2C_D3_2024_Modul6_080
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Setup Environment Variables**
+   - Buat file `.env` di root project
+   - Isi dengan konfigurasi MongoDB dan pengaturan lainnya:
+     ```sh
+     MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
+     # ...
+     ```
+
+4. **Cek Issues (Opsional)**
+   ```bash
+   flutter analyze
+   ```
+
+5. **Jalankan Test (Opsional)**
+   ```bash
+   flutter test
+   ```
+
+6. **Build Project**
+   ```bash
+   # Untuk release APK
+   flutter build apk --release
+
+   # Untuk release dengan split ABI
+   flutter build apk --split-per-abi
+   ```
+
+7. **Install APK**
+   Pastikan telah terhubung ke device android dan menyalakan opsi **USB Debugging** dan **Install via USB** (Developer Option)
+   ```bash
+   adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk # dari --split-per-abi
+   # atau
+   adb install build/app/outputs/flutter-apk/app-release.apk
+   ```
+
 ## Lesson Learned (Refleksi Akhir)
 
 1. **Konsep Baru**:
