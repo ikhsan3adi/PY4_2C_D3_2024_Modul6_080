@@ -127,11 +127,10 @@ class VisionController extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       await controller!.setFlashMode(
-        isFlashlightOn ? FlashMode.always : FlashMode.off,
+        isFlashlightOn ? FlashMode.torch : FlashMode.off,
       );
     } catch (e) {
       errorMessage = 'Failed to toggle flashlight: $e';
-      notifyListeners();
     }
 
     notifyListeners();
